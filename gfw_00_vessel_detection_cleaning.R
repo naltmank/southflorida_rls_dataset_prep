@@ -44,6 +44,17 @@ detections_near_sites <- st_join(vessel_detections_sf, sites_buffer, join = st_w
          length_m_inferred <= 40,
          speed_kn_inferred < 10)
 
-write.csv(detections_near_sites, here::here("global_fishing_watch_data", "detections_near_sites.csv"),
+# some duplicates in df - not unsurprising due to overlapping satellites or grid cells per gfw
+# also, detect_id and geometry causes issue on write because of the comma --> remove dupes and then detect_id
+
+detections_near_sites_nodupes <- detections_near_sites[!duplicated(detections_near_sites$detect_id), ] 
+
+remove_cols <- c("detect_id", "geometry")
+
+detections_near_sites_nodupes <- detections_near_sites_nodupes[,-which(names(detections_near_sites_nodupes) %in%
+                                                                         remove_cols)]
+
+
+write.csv(detections_near_sites_nodupes, here::here("global_fishing_watch_data", "detections_near_sites.csv"),
           row.names = F)
 
