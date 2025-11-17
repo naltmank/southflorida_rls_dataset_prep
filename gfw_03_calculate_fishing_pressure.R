@@ -79,6 +79,8 @@ detections_with_overpass_annual$fishing_pressure <-
   detections_with_overpass_annual$detections / 
   (detections_with_overpass_annual$n_satellites * detections_with_overpass_annual$overpasses_cloud_under_50_annual)
 
+write.csv(detections_with_overpass_annual, here::here("global_fishing_watch_data",
+                                                      "annual_detections_standardized.csv"), row.names = F)
 
 
 library(lattice)
@@ -95,7 +97,7 @@ bwplot(fishing_pressure_mean ~ region, data = mean_fishing_pressure)
     geom_jitter(data= mean_fishing_pressure, aes(x = region, y = fishing_pressure_mean, colour = region)) +
     geom_boxplot(data= mean_fishing_pressure, aes( x=region, y = fishing_pressure_mean, colour = region),
                  outlier.shape = NA, fill = NA) +
-    scale_x_discrete( limits = c("MC", "PB", "BC", "DC", "UK", "MK", "LK", "DT") ) +
+    scale_x_discrete( limits = c("MC", "PB", "BC", "DC", "UK", "MK", "LK", "MQ", "DT") ) +
     
 #    scale_colour_manual(values = okabe_ito,
 #                        limits = c("PB", "BC", "DC", "UK", "MK", "LK", "DT"))   + 
