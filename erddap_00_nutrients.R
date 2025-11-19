@@ -130,4 +130,4 @@ nutrients_final <- bind_rows(dat_clean, missing_filled)
 
 
 
-write.csv(nutrients_final, here::here("erddap_data", "nutrients_annual_490med.csv"), row.names = F)
+write.csv(nutrients_final, here::here("erddap_data", "nutrients_annual_erddap.csv"), row.names = F)
