@@ -12,6 +12,7 @@ site_locations <- read.csv(here::here("metadata_files",
 nutrients <- read.csv(here::here("erddap_data",
                            "nutrients_2021sd.csv"))
 
+
 # convert to spatial object on same coordinate system
 nutrients_sf <- st_as_sf(nutrients, coords = c("longitude", "latitude"), crs = 4326)
 site_locations_sf <- st_as_sf(site_locations, coords = c("longitude", "latitude"), crs = 4326)
