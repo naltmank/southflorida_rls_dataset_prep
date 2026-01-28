@@ -5,7 +5,7 @@ librarian::shelf(here, sf, tidyverse, lubridate)
 # read detections near sites - strange error with duplicate rownames - modify read functions
 
 detections_near_sites <- read_csv(
-  here::here("global_fishing_watch_data", "detections_near_sites.csv"),
+  here::here("global_fishing_watch_data", "detections_near_sites_20260127.csv"),
   quote = "\""
 )
 
@@ -55,7 +55,7 @@ detections_annual <- detections_annual %>%
   left_join(sat_per_year, by = "year")
 
 # read overpass data
-overpasses <- read.csv(here::here("global_fishing_watch_data", "satellite_overpass_summary.csv"))
+overpasses <- read.csv(here::here("global_fishing_watch_data", "satellite_overpass_summary_20260127.csv"))
 
 # sum annual
 overpasses_annual <- overpasses %>%
@@ -80,23 +80,24 @@ detections_with_overpass_annual$fishing_pressure <-
   (detections_with_overpass_annual$n_satellites * detections_with_overpass_annual$overpasses_cloud_under_50_annual)
 
 write.csv(detections_with_overpass_annual, here::here("global_fishing_watch_data",
-                                                      "annual_detections_standardized.csv"), row.names = F)
+                                                      "annual_detections_standardized_20260127.csv"), row.names = F)
 
 
 library(lattice)
-bwplot(fishing_pressure ~ region, data = detections_with_overpass_annual)
+bwplot(fishing_pressure ~  as.factor(year) | region, data = detections_with_overpass_annual)
 
 mean_fishing_pressure <- detections_with_overpass_annual %>%
-  group_by(region, site_code, site_name, habitat, t1_depth, t2_depth) %>%
+  group_by(year, region, site_code, site_name, habitat, t1_depth, t2_depth) %>%
   summarise(fishing_pressure_mean = mean(fishing_pressure, na.rm = T))
   
-bwplot(fishing_pressure_mean ~ region, data = mean_fishing_pressure)
+bwplot(fishing_pressure_mean ~ as.factor(year) | region, data = mean_fishing_pressure)
 
 (mean_fishing_pressure_plot <- 
     ggplot() + 
     geom_jitter(data= mean_fishing_pressure, aes(x = region, y = fishing_pressure_mean, colour = region)) +
     geom_boxplot(data= mean_fishing_pressure, aes( x=region, y = fishing_pressure_mean, colour = region),
                  outlier.shape = NA, fill = NA) +
+    facet_wrap(~as.factor(year)) +
     scale_x_discrete( limits = c("MC", "PB", "BC", "DC", "UK", "MK", "LK", "MQ", "DT") ) +
     
 #    scale_colour_manual(values = okabe_ito,

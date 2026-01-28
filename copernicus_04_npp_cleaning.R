@@ -19,27 +19,27 @@ buffers <- buffer(sites_ae, width = 5000)
 buffers_ll <- project(buffers, "EPSG:4326")
 
 
-# read kd data
-kd <- terra::rast(here::here("copernicus_data", "copernicus_kd_lightattenuation_2026.nc"))
+# read npp data
+npp <- terra::rast(here::here("copernicus_data", "copernicus_npp_2026.nc"))
 
 # get band names (includes time and depth steps)
-band_names <- names(kd)
-n_layers <- nlyr(kd)
+band_names <- names(npp)
+n_layers <- nlyr(npp)
 
 # split band names up into desired info
 parsed <- tibble(band = band_names) %>%
   mutate(
-    kd = str_extract(band, "^[^_]+"),  # everything before first "_" is the kd
+    source = str_extract(band, "^[^_]+"),  # everything before first "_" is either chl or npp
     depth = str_extract(band, "(?<=depth=)[0-9\\.]+") |> as.numeric(), # depth band
     t_idx = str_extract(band, "(?<=_)\\d+") |> as.numeric() # time band (as step number)
   )
 
 # get actual time info and append to parsed df
-times <- terra::time(kd)
+times <- terra::time(npp)
 parsed$date <- times
 
-# extract kd data for buffer region within each band
-ext_raw <- terra::extract(kd, buffers_ll, fun = mean, na.rm = TRUE)
+# extract npp data for buffer region within each band
+ext_raw <- terra::extract(npp, buffers_ll, fun = mean, na.rm = TRUE)
 ext_raw$site_code <- site_locations$site_code
 
 
@@ -51,65 +51,56 @@ ext_long <- ext_raw %>%
     values_to = "value"
   ) %>%
   left_join(parsed, by = "band") %>%
-  select(site_code, kd, depth, date, value)
+  select(site_code, source, depth, date, value)
 
-#### AGGREGATE KD DATA ####
+#### AGGREGATE npp DATA ####
 # summarise data to mean values per year at each depth band
 annual_depth_means <- ext_long %>%
   mutate(date = date,
          year = year(date)) %>%
-  group_by(site_code, kd, depth, year) %>%
+  group_by(site_code, source, depth, year) %>%
   summarise(
     mean_value = mean(value, na.rm = TRUE),
     .groups = "drop"
   )
 
 # merge with site metadata
-kd_annual <- annual_depth_means %>%
+npp_annual <- annual_depth_means %>%
   left_join(site_locations, by = "site_code")
 
 # get mean depth of transects
-kd_annual$mean_transect_depth <- rowMeans(kd_annual[,c("t1_depth", 't2_depth')], na.rm=TRUE)
+npp_annual$mean_transect_depth <- rowMeans(npp_annual[,c("t1_depth", 't2_depth')], na.rm=TRUE)
 
-# subset first depth layer 
-kd_sub <- subset(kd_annual, depth == unique(kd_annual$depth)[1])
+# subset first depth layer - rounding errors make this subset not work
+# extract exact value by calling the vector of unique values of depth
+npp_sub <- subset(npp_annual, depth == unique(npp_annual$depth)[1])
 
-# REMOVED - DEPTH SLICES
-# # rename the kd depth column to avoid confusion
-# names(kd_annual)[names(kd_annual) == "depth"] <- "kd_depth"
-# 
-# # subset kd based on measurement depth closest to mean_transect depth
-# kd_closest <- kd_annual %>%
-#   mutate(depth_diff = abs(kd_depth - mean_transect_depth)) %>%
-#   group_by(year, region, site_code, kd, site_name, habitat, t1_depth, t2_depth) %>% 
-#   slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
-#   ungroup()
-# 
+
 # pivot back wide
-kd_wide <- kd_sub %>%
-  pivot_wider(names_from = kd,
+npp_wide <- npp_sub %>%
+  pivot_wider(names_from = source,
               values_from = mean_value)
 
-#### INFER MISSING KD VALUES ####
+#### INFER MISSING npp/CHLA VALUES ####
 
 # not all sites were included in merge and some sites have NAs
 # infer the nturient values based on the mean values from the other sites in that region
-kd_vars <- "kd"
+npp_vars <- c("nppv", "o2")
 
 # get regional means per year
-region_means <- kd_wide %>%
+region_means <- npp_wide %>%
   group_by(year, region) %>%
-  summarise(kd = mean(kd, na.rm = T))
+  summarize(across(all_of(npp_vars), ~ mean(.x, na.rm = TRUE)))
 
 # include habitat as an option within each region × year
-habitat_means <- kd_wide %>%
+habitat_means <- npp_wide %>%
   group_by(year, region, habitat) %>%
-  summarise(kd = mean(kd, na.rm = T))
+  summarize(across(all_of(npp_vars), ~ mean(.x, na.rm = TRUE)))
 
 
-# split the kd dataset into rows that have data and the NAs rows from USEC sites with missing depth
-na_depth_rows <- kd_wide %>% filter(is.na(mean_transect_depth))
-has_depth_rows <- kd_wide %>% filter(!is.na(mean_transect_depth))
+# split the npp dataset into rows that have data and the NAs rows from USEC sites with missing depth
+na_depth_rows <- npp_wide %>% filter(is.na(mean_transect_depth))
+has_depth_rows <- npp_wide %>% filter(!is.na(mean_transect_depth))
 
 
 # merge the na depth rows with the regional means - adds new columns with the suffix "_reg" (e.g. fe_mean_reg)
@@ -125,8 +116,8 @@ dat_na_filled <- na_depth_rows %>%
             suffix = c("", "_reg"))
 
 
-# replace the standard kd_mean values with the regional values by habitat
-for (v in kd_vars) {
+# replace the standard npp_mean values with the regional values by habitat
+for (v in npp_vars) {
   
   hab_col <- paste0(v, "_hab")
   reg_col <- paste0(v, "_reg")
@@ -150,16 +141,16 @@ dat_na_filled <- dat_na_filled %>%
   select(-ends_with("_hab"), -ends_with("_reg"))
 
 # recombine data
-kd_recombined <- rbind(has_depth_rows, dat_na_filled)
+npp_recombined <- bind_rows(has_depth_rows, dat_na_filled)
 
 ##### HANDLE "LAND" DATA #####
 # Low spatial resolution makes some data appear on land, resulting in nas
 # impute those values using the same methods as above
-land_rows <- kd_recombined %>% 
-  filter(if_any(all_of(kd_vars), is.na))
+land_rows <- npp_recombined %>% 
+  filter(if_any(all_of(npp_vars), is.na))
 
-sea_rows <- kd_recombined %>% 
-  filter(if_all(all_of(kd_vars), ~ !is.na(.x)))
+sea_rows <- npp_recombined %>% 
+  filter(if_all(all_of(npp_vars), ~ !is.na(.x)))
 
 # repeat workflow
 land_filled <- land_rows %>%
@@ -172,7 +163,7 @@ land_filled <- land_rows %>%
             by = c("year", "region"), 
             suffix = c("", "_reg"))
 
-for (v in kd_vars) {
+for (v in npp_vars) {
   
   hab_col <- paste0(v, "_hab")
   reg_col <- paste0(v, "_reg")
@@ -197,8 +188,8 @@ land_filled <- land_filled %>%
 
 
 # recombine data
-kd_final <- rbind(land_filled, sea_rows)
+npp_final <- bind_rows(land_filled, sea_rows)
 
 
 
-write.csv(kd_final, here::here("copernicus_data", "kd_annual_copernicus_20260128.csv"), row.names = F)
+write.csv(npp_final, here::here("copernicus_data", "npp_annual_copernicus_20260128.csv"), row.names = F)

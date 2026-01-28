@@ -30,9 +30,9 @@ buffer_h3_lookup <- tibble(
 h3_ids_needed <- unique(buffer_h3_lookup$h3_id)
 
 # Set up input/output paths
-overpass_dir <- here::here("global_fishing_watch_data", "satellite_overpass")
-filtered_dir <- here::here("global_fishing_watch_data", "filtered_overpass")
-dir.create(filtered_dir, showWarnings = FALSE)
+overpass_dir <- here::here("global_fishing_watch_data", "satellite_overpass/current")
+filtered_dir <- here::here("global_fishing_watch_data", "filtered_overpass/current")
+# dir.create(filtered_dir, showWarnings = FALSE)
 
 # Get list of all overpass CSV files
 overpass_files <- list.files(overpass_dir, full.names = TRUE, pattern = "\\.csv$")

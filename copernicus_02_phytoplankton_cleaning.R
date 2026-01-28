@@ -20,7 +20,7 @@ buffers_ll <- project(buffers, "EPSG:4326")
 
 
 # read phytoplankton data
-phytoplankton <- terra::rast(here::here("copernicus_data", "copernicus_phytoplankton.nc"))
+phytoplankton <- terra::rast(here::here("copernicus_data", "copernicus_phytoplankton_2026.nc"))
 
 # get band names (includes time and depth steps)
 band_names <- names(phytoplankton)
@@ -71,18 +71,23 @@ phytoplankton_annual <- annual_depth_means %>%
 # get mean depth of transects
 phytoplankton_annual$mean_transect_depth <- rowMeans(phytoplankton_annual[,c("t1_depth", 't2_depth')], na.rm=TRUE)
 
-# rename the phytoplankton depth column to avoid confusion
-names(phytoplankton_annual)[names(phytoplankton_annual) == "depth"] <- "phytoplankton_depth"
+# subset first depth layer - rounding errors make this subset not work
+# extract exact value by calling the vector of unique values of depth
+phytoplankton_sub <- subset(phytoplankton_annual, depth == unique(phytoplankton_annual$depth)[1])
 
-# subset phytoplankton based on measurement depth closest to mean_transect depth
-phytoplankton_closest <- phytoplankton_annual %>%
-  mutate(depth_diff = abs(phytoplankton_depth - mean_transect_depth)) %>%
-  group_by(year, region, site_code, source, site_name, habitat, t1_depth, t2_depth) %>% 
-  slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
+# REMOVED DEPTH BANDS
+# # rename the phytoplankton depth column to avoid confusion
+# names(phytoplankton_annual)[names(phytoplankton_annual) == "depth"] <- "phytoplankton_depth"
+# 
+# # subset phytoplankton based on measurement depth closest to mean_transect depth
+# phytoplankton_closest <- phytoplankton_annual %>%
+#   mutate(depth_diff = abs(phytoplankton_depth - mean_transect_depth)) %>%
+#   group_by(year, region, site_code, source, site_name, habitat, t1_depth, t2_depth) %>% 
+#   slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
+#   ungroup()
+# 
 # pivot back wide
-phytoplankton_closest_wide <- phytoplankton_closest %>%
+phytoplankton_wide <- phytoplankton_sub %>%
   pivot_wider(names_from = source,
               values_from = mean_value)
 
@@ -93,19 +98,19 @@ phytoplankton_closest_wide <- phytoplankton_closest %>%
 phytoplankton_vars <- c("chl", "phyc")
 
 # get regional means per year
-region_means <- phytoplankton_closest_wide %>%
+region_means <- phytoplankton_wide %>%
   group_by(year, region) %>%
   summarize(across(all_of(phytoplankton_vars), ~ mean(.x, na.rm = TRUE)))
 
 # include habitat as an option within each region × year
-habitat_means <- phytoplankton_closest_wide %>%
+habitat_means <- phytoplankton_wide %>%
   group_by(year, region, habitat) %>%
   summarize(across(all_of(phytoplankton_vars), ~ mean(.x, na.rm = TRUE)))
 
 
 # split the phytoplankton dataset into rows that have data and the NAs rows from USEC sites with missing depth
-na_depth_rows <- phytoplankton_closest_wide %>% filter(is.na(mean_transect_depth))
-has_depth_rows <- phytoplankton_closest_wide %>% filter(!is.na(mean_transect_depth))
+na_depth_rows <- phytoplankton_wide %>% filter(is.na(mean_transect_depth))
+has_depth_rows <- phytoplankton_wide %>% filter(!is.na(mean_transect_depth))
 
 
 # merge the na depth rows with the regional means - adds new columns with the suffix "_reg" (e.g. fe_mean_reg)
@@ -197,4 +202,4 @@ phytoplankton_final <- bind_rows(land_filled, sea_rows)
 
 
 
-write.csv(phytoplankton_final, here::here("copernicus_data", "phytoplankton_annual_copernicus.csv"), row.names = F)
+write.csv(phytoplankton_final, here::here("copernicus_data", "phytoplankton_annual_copernicus_20260128.csv"), row.names = F)

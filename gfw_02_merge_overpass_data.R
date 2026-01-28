@@ -27,7 +27,7 @@ buffer_h3_lookup <- tibble(
   select(site_code, h3_id)
 
 # read filtered overpass files
-filtered_dir <- here::here("global_fishing_watch_data", "filtered_overpass")
+filtered_dir <- here::here("global_fishing_watch_data", "filtered_overpass/current")
 filtered_files <- list.files(filtered_dir, full.names = TRUE, pattern = "\\.csv$")
 
 # Read and combine filtered data into single df
@@ -68,6 +68,6 @@ overpass_summary <- overpass_site[
 
 
 
-write.csv(overpass_summary, here::here("global_fishing_watch_data", "satellite_overpass_summary.csv"),
+write.csv(overpass_summary, here::here("global_fishing_watch_data", "satellite_overpass_summary_20260127.csv"),
           row.names = F)
 

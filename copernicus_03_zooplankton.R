@@ -20,7 +20,7 @@ buffers_ll <- project(buffers, "EPSG:4326")
 
 
 # read zooplankton data
-zooc <- terra::rast(here::here("copernicus_data", "copernicus_zooplankton.nc"))
+zooc <- terra::rast(here::here("copernicus_data", "copernicus_zooplankton_2026.nc"))
 
 # get band names (includes time and depth steps)
 band_names <- names(zooc)
@@ -71,18 +71,22 @@ zooc_annual <- annual_depth_means %>%
 # get mean depth of transects
 zooc_annual$mean_transect_depth <- rowMeans(zooc_annual[,c("t1_depth", 't2_depth')], na.rm=TRUE)
 
+# subset first depth layer 
+zooc_sub <- subset(zooc_annual, depth == unique(zooc_annual$depth)[1])
+
+# REMOVED DEPTH SLICES
 # rename the zooc depth column to avoid confusion
-names(zooc_annual)[names(zooc_annual) == "depth"] <- "zooc_depth"
-
-# subset zooc based on measurement depth closest to mean_transect depth
-zooc_closest <- zooc_annual %>%
-  mutate(depth_diff = abs(zooc_depth - mean_transect_depth)) %>%
-  group_by(year, region, site_code, zooc, site_name, habitat, t1_depth, t2_depth) %>% 
-  slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
-  ungroup()
-
+# names(zooc_annual)[names(zooc_annual) == "depth"] <- "zooc_depth"
+# 
+# # subset zooc based on measurement depth closest to mean_transect depth
+# zooc_closest <- zooc_annual %>%
+#   mutate(depth_diff = abs(zooc_depth - mean_transect_depth)) %>%
+#   group_by(year, region, site_code, zooc, site_name, habitat, t1_depth, t2_depth) %>% 
+#   slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
+#   ungroup()
+# 
 # pivot back wide
-zooc_closest_wide <- zooc_closest %>%
+zooc_wide <- zooc_sub %>%
   pivot_wider(names_from = zooc,
               values_from = mean_value)
 
@@ -93,19 +97,19 @@ zooc_closest_wide <- zooc_closest %>%
 zooc_vars <- "zooc"
 
 # get regional means per year
-region_means <- zooc_closest_wide %>%
+region_means <- zooc_wide %>%
   group_by(year, region) %>%
   summarise(zooc = mean(zooc, na.rm = T))
 
 # include habitat as an option within each region × year
-habitat_means <- zooc_closest_wide %>%
+habitat_means <- zooc_wide %>%
   group_by(year, region, habitat) %>%
   summarise(zooc = mean(zooc, na.rm = T))
 
 
 # split the zooc dataset into rows that have data and the NAs rows from USEC sites with missing depth
-na_depth_rows <- zooc_closest_wide %>% filter(is.na(mean_transect_depth))
-has_depth_rows <- zooc_closest_wide %>% filter(!is.na(mean_transect_depth))
+na_depth_rows <- zooc_wide %>% filter(is.na(mean_transect_depth))
+has_depth_rows <- zooc_wide %>% filter(!is.na(mean_transect_depth))
 
 
 # merge the na depth rows with the regional means - adds new columns with the suffix "_reg" (e.g. fe_mean_reg)
@@ -197,4 +201,4 @@ zooc_final <- bind_rows(land_filled, sea_rows)
 
 
 
-write.csv(zooc_final, here::here("copernicus_data", "zooc_annual_copernicus.csv"), row.names = F)
+write.csv(zooc_final, here::here("copernicus_data", "zooc_annual_copernicus_20260128.csv"), row.names = F)

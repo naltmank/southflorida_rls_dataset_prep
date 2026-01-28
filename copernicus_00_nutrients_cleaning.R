@@ -19,7 +19,7 @@ buffers <- buffer(sites_ae, width = 5000)
 buffers_ll <- project(buffers, "EPSG:4326")
 
 # read nutrients data
-nutrients <- terra::rast(here::here("copernicus_data", "copernicus_nutrients.nc"))
+nutrients <- terra::rast(here::here("copernicus_data", "copernicus_nutrients_2026.nc"))
 
 # get band names (includes time and depth steps)
 band_names <- names(nutrients)
@@ -52,6 +52,15 @@ ext_long <- ext_raw %>%
   left_join(parsed, by = "band") %>%
   select(site_code, nutrient, depth, date, value)
 
+##### check effect of depth band #####
+random <- subset(ext_long, site_code == "1P7")
+ggplot(data = random) +
+  geom_point(aes(x = depth, y = value, colour = date, group = date)) +
+  geom_line(aes(x = depth, y = value, colour = date, group = date)) +
+  facet_wrap(~nutrient)
+# depth goes down, but it's based on a model on a modeled value and I don't think the differences are big enough
+# ignoring depth band and just using top layer
+
 #### AGGREGATE NUTRIENT DATA ####
 # summarise data to mean values per year at each depth band
 annual_depth_means <- ext_long %>%
@@ -61,7 +70,7 @@ annual_depth_means <- ext_long %>%
   summarise(
     mean_value = mean(value, na.rm = TRUE),
     .groups = "drop"
-  )
+  ) 
 
 # merge with site metadata
 nutrients_annual <- annual_depth_means %>%
@@ -70,18 +79,24 @@ nutrients_annual <- annual_depth_means %>%
 # get mean depth of transects
 nutrients_annual$mean_transect_depth <- rowMeans(nutrients_annual[,c("t1_depth", 't2_depth')], na.rm=TRUE)
 
-# rename the nutrient depth column to avoid confusion
-names(nutrients_annual)[names(nutrients_annual) == "depth"] <- "nutrient_depth"
+# subset first depth layer - rounding errors make this subset not work
+# extract exact value by calling the vector of unique values of depth
+nutrients_sub <- subset(nutrients_annual, depth == unique(nutrients_annual$depth)[1])
 
-# subset nutrients based on measurement depth closest to mean_transect depth
-nutrients_closest <- nutrients_annual %>%
-  mutate(depth_diff = abs(nutrient_depth - mean_transect_depth)) %>%
-  group_by(year, region, site_code, nutrient, site_name, habitat, t1_depth, t2_depth) %>% 
-  slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
-  ungroup()
 
-# pivot back wide
-nutrients_closest_wide <- nutrients_closest %>%
+# REMOVED CODE - SUBSETTING BASED ON DEPTH LAYER
+# # rename the nutrient depth column to avoid confusion
+# names(nutrients_annual)[names(nutrients_annual) == "depth"] <- "nutrient_depth"
+# 
+# # subset nutrients based on measurement depth closest to mean_transect depth
+# nutrients_closest <- nutrients_annual %>%
+#   mutate(depth_diff = abs(nutrient_depth - mean_transect_depth)) %>%
+#   group_by(year, region, site_code, nutrient, site_name, habitat, t1_depth, t2_depth) %>% 
+#   slice_min(order_by = depth_diff, n = 1, with_ties = FALSE) %>%
+#   ungroup()
+
+# pivot wide
+nutrients_wide <- nutrients_sub %>%
   pivot_wider(names_from = nutrient,
               values_from = mean_value)
 
@@ -93,19 +108,19 @@ nutrients_closest_wide <- nutrients_closest %>%
 nutrient_vars <- c("fe", "no3", "po4", "si")
 
 # get regional means per year
-region_means <- nutrients_closest_wide %>%
+region_means <- nutrients_wide %>%
   group_by(year, region) %>%
   summarize(across(all_of(nutrient_vars), ~ mean(.x, na.rm = TRUE)))
 
 # include habitat as an option within each region × year
-habitat_means <- nutrients_closest_wide %>%
+habitat_means <- nutrients_wide %>%
   group_by(year, region, habitat) %>%
   summarize(across(all_of(nutrient_vars), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
 
 
 # split the nutrients dataset into rows that have data and the NAs rows from USEC sites with missing depth
-na_depth_rows <- nutrients_closest_wide %>% filter(is.na(mean_transect_depth))
-has_depth_rows <- nutrients_closest_wide %>% filter(!is.na(mean_transect_depth))
+na_depth_rows <- nutrients_wide %>% filter(is.na(mean_transect_depth))
+has_depth_rows <- nutrients_wide %>% filter(!is.na(mean_transect_depth))
 
 
 # merge the na depth rows with the regional means - adds new columns with the suffix "_reg" (e.g. fe_mean_reg)
@@ -196,4 +211,4 @@ land_filled <- land_filled %>%
 nutrients_final <- bind_rows(land_filled, sea_rows)
 
 
-write.csv(nutrients_final, here::here("copernicus_data", "nutrients_annual_copernicus.csv"), row.names = F)
+write.csv(nutrients_final, here::here("copernicus_data", "nutrients_annual_copernicus_20260128.csv"), row.names = F)
