@@ -62,7 +62,7 @@ ext_long <- ext_raw %>%
 # convert kelvin to celsius
 ext_long$sst <- ext_long$sst_k - 273.15
 
-#### AGGREGATE TEMP DATA ####
+#### AGGREGATE MONTHLY TEMP DATA ####
 # summarise data to mean values per year at each depth band
 temp_summary <- ext_long %>%
   mutate(date = date,
@@ -89,7 +89,7 @@ temp_monthly <- temp_summary %>%
 temp_monthly <- temp_monthly %>%
   mutate(across(all_of(temp_vars), ~ ifelse(is.nan(.x), NA_real_, .x)))
 
-#### INFER MISSING TEMP VALUES ####
+##### INFER MISSING TEMP VALUES #####
 
 # not all sites were included in merge and some sites have NAs
 # infer the temp values based on the mean values from the other sites in that region
@@ -129,3 +129,71 @@ temp_final %>%
   summarize(across(all_of(temp_vars), ~ sum(is.na(.x))))
 
 write.csv(temp_final, here::here("copernicus_data", "temp_monthly_copernicus_20260128.csv"), row.names = F)
+
+
+#### AGGREGATE ANNUAL TEMP DATA ####
+# summarise data to mean values per year at each depth band
+temp_annual_summary <- ext_long %>%
+  mutate(date = date,
+         year = year(date)) %>%
+  group_by(site_code, year, ) %>%
+  summarise(
+    sst_annual_mean = mean(sst, na.rm = TRUE),
+    sst_annual_sd = sd(sst, na.rm = TRUE),
+    sst_annual_min = min(sst, na.rm = TRUE),
+    sst_annual_max = max(sst, na.rm = TRUE),
+    
+    .groups = "drop"
+  ) 
+
+# some NAs fron USEC25 triggered Inf values --> mutate back to NA
+temp_annual_summary[sapply(temp_annual_summary, is.infinite)] <- NA
+
+# merge with site metadata
+temp_annual <- temp_annual_summary %>%
+  left_join(site_locations, by = "site_code")
+
+# annual temp vars
+temp_vars <- c("sst_annual_mean", "sst_annual_sd", "sst_annual_min", "sst_annual_max")
+
+# make sure NAs and NaNs are treated the same
+temp_annual <- temp_annual %>%
+  mutate(across(all_of(temp_vars), ~ ifelse(is.nan(.x), NA_real_, .x)))
+
+
+##### INFER MISSING TEMP VALUES #####
+
+# get regional means per year/month
+region_means <- temp_annual %>%
+  group_by(year, region) %>%
+  summarize(across(all_of(temp_vars), ~ mean(.x, na.rm = TRUE))) %>%
+  rename_with(~ paste0(.x, "_region"), all_of(temp_vars))
+
+# include habitat as an option within each region × year x month
+habitat_means <- temp_annual %>%
+  group_by(year, region, habitat) %>%
+  summarize(across(all_of(temp_vars), ~ mean(.x, na.rm = TRUE))) %>%
+  rename_with(~ paste0(.x, "_habitat"), all_of(temp_vars))
+
+# fill data - merge with helper df...
+temp_filled <- temp_annual %>%
+  left_join(habitat_means,
+            by = c("year", "region", "habitat"))
+
+# ... then replace the NAs
+temp_final <- temp_filled %>%
+  mutate(across(
+    all_of(temp_vars),
+    ~ coalesce(
+      .x,
+      get(paste0(cur_column(), "_habitat"))
+    )
+  )) %>%
+  # and remove helper columns
+  select(-ends_with("_habitat"))
+
+# make sure all NAs were filled
+temp_final %>%
+  summarize(across(all_of(temp_vars), ~ sum(is.na(.x))))
+
+write.csv(temp_final, here::here("copernicus_data", "temp_annual_copernicus_20260128.csv"), row.names = F)
