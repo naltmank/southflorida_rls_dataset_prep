@@ -142,6 +142,7 @@ temp_annual_summary <- ext_long %>%
     sst_annual_sd = sd(sst, na.rm = TRUE),
     sst_annual_min = min(sst, na.rm = TRUE),
     sst_annual_max = max(sst, na.rm = TRUE),
+    sst_annual_range = max(sst, na.rm = TRUE) - min(sst, na.rm = TRUE),
     
     .groups = "drop"
   ) 
@@ -154,7 +155,7 @@ temp_annual <- temp_annual_summary %>%
   left_join(site_locations, by = "site_code")
 
 # annual temp vars
-temp_vars <- c("sst_annual_mean", "sst_annual_sd", "sst_annual_min", "sst_annual_max")
+temp_vars <- c("sst_annual_mean", "sst_annual_sd", "sst_annual_min", "sst_annual_max", "sst_annual_range")
 
 # make sure NAs and NaNs are treated the same
 temp_annual <- temp_annual %>%
