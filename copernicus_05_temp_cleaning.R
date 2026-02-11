@@ -62,6 +62,8 @@ ext_long <- ext_raw %>%
 # convert kelvin to celsius
 ext_long$sst <- ext_long$sst_k - 273.15
 
+# JHO exported temp data daily here
+
 #### AGGREGATE MONTHLY TEMP DATA ####
 # summarise data to mean values per year at each depth band
 temp_summary <- ext_long %>%
